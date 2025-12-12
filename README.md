@@ -73,7 +73,7 @@ Sigue estos pasos para correr el proyecto en tu máquina local:
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone [https://github.com/TU_USUARIO/StudyFlow.git](https://github.com/TU_USUARIO/StudyFlow.git)
+    git clone [https://github.com/EJK-S/Aplicacion_StudyFlow.git](https://github.com/EJK-S/Aplicacion_StudyFlow.git)
     cd StudyFlow
     ```
 
