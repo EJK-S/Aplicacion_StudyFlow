@@ -318,12 +318,16 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                   children: [
                     const Text("Promedio Actual:",
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87, // <--- AGREGAR ESTA LÍNEA
+                        )),
                     Text(
-                      average.toStringAsFixed(2), // Muestra solo 2 decimales
+                      average.toStringAsFixed(2),
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
+                        // El número ya tiene buen contraste porque usas shade800 (oscuro)
                         color: average >= 10.5
                             ? Colors.green.shade800
                             : Colors.red.shade800,
