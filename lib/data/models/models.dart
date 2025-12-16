@@ -12,6 +12,17 @@ class Semester extends HiveObject {
 
   @HiveField(2)
   bool isCurrent = false;
+
+  // 👇 AGREGAR ESTO: Convierte el objeto a Mapa
+  Map<String, dynamic> toJson() {
+    return {
+      'id': key, // Guardamos la Key original para mantener las relaciones
+      'name': name,
+      'startDate':
+          startDate.toIso8601String(), // Las fechas se guardan como texto ISO
+      'isCurrent': isCurrent,
+    };
+  }
 }
 
 @HiveType(typeId: 1)
@@ -20,16 +31,24 @@ class Course extends HiveObject {
   late String name;
 
   @HiveField(1)
-  String? professorName;
+  late int credits;
 
   @HiveField(2)
-  int credits = 0;
+  late int semesterId; // Esta es la conexión con el Semestre
 
   @HiveField(3)
-  String color = '#FF5733';
+  String? professorName;
 
-  @HiveField(4)
-  int semesterId = 0; // Relación manual por ID
+  // 👇 AGREGAR ESTO
+  Map<String, dynamic> toJson() {
+    return {
+      'id': key,
+      'name': name,
+      'credits': credits,
+      'semesterId': semesterId,
+      'professorName': professorName,
+    };
+  }
 }
 
 @HiveType(typeId: 2)
@@ -38,11 +57,23 @@ class Evaluation extends HiveObject {
   late String name;
 
   @HiveField(1)
-  double? scoreObtained;
+  double? score; // Nota
 
   @HiveField(2)
-  double weight = 0.0;
+  late double weight; // Peso %
 
   @HiveField(3)
-  int courseId = 0; // Relación manual por ID
+  late int courseId; // Conexión con el Curso
+
+  double? get scoreObtained => score;
+
+  // 👇 AGREGAR ESTO
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'score': score,
+      'weight': weight,
+      'courseId': courseId,
+    };
+  }
 }

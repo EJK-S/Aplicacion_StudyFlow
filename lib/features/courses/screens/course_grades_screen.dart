@@ -77,18 +77,27 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
 
     // Lógica encapsulada
     Future<void> submitForm() async {
+      // 1. Si falta el PESO o el NOMBRE, no hacemos nada (La nota sí puede faltar)
       if (nameController.text.isEmpty || weightController.text.isEmpty) return;
 
+      // 2. IMPORTANTE: Cerrar el teclado antes de guardar para evitar congelamientos
+      FocusScope.of(context).unfocus();
+
       final service = HiveDataService();
+
+      // 3. Crear el objeto
       final newEval = Evaluation()
         ..name = nameController.text
-        ..scoreObtained = double.tryParse(scoreController.text)
-        // Incluimos el parche del % aquí también por seguridad
+        // LÓGICA SEGURA: Si el texto está vacío, guardamos 'null'. Si hay texto, convertimos a número.
+        ..score = scoreController.text.isEmpty
+            ? null
+            : double.tryParse(scoreController.text)
         ..weight =
             double.tryParse(weightController.text.replaceAll('%', '').trim()) ??
                 0.0
         ..courseId = widget.course.key;
 
+      // 4. Guardar y Cerrar
       await service.saveEvaluation(newEval);
       if (context.mounted) Navigator.pop(context);
     }
@@ -168,22 +177,35 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
 
   void _showEditEvaluationForm(BuildContext context, Evaluation eval) {
     final nameController = TextEditingController(text: eval.name);
-    final scoreController =
-        TextEditingController(text: eval.scoreObtained?.toString() ?? '');
+    final scoreController = TextEditingController(text: eval.score.toString());
     final weightController =
         TextEditingController(text: eval.weight.toString());
 
     // 1. CREAMOS LA FUNCIÓN DE GUARDAR AQUÍ ADENTRO PARA REUTILIZARLA
     Future<void> submitForm() async {
+      // 1. Validaciones básicas
       if (nameController.text.isEmpty) return;
 
+      // 2. Quitamos el foco para evitar el congelamiento (Igual que en agregar)
+      FocusScope.of(context).unfocus();
+
+      // 3. AQUÍ ESTÁ EL TRUCO: Modificamos 'eval', NO creamos 'newEval'
       eval.name = nameController.text;
-      eval.scoreObtained = double.tryParse(scoreController.text);
+
+      // Lógica de la nota opcional
+      eval.score = scoreController.text.isEmpty
+          ? null
+          : double.tryParse(scoreController.text);
+
+      // Lógica del peso
       eval.weight =
           double.tryParse(weightController.text.replaceAll('%', '').trim()) ??
               0.0;
 
+      // 4. Guardamos los cambios en el MISMO objeto
       await eval.save();
+
+      // 5. Cerramos
       if (context.mounted) Navigator.pop(context);
     }
 

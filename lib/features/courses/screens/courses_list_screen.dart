@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../data/local/hive_data_service.dart';
 import '../../../data/models/models.dart';
-import '../widgets/semester_summary_card.dart'; // <--- 1. ASEGÚRATE DE IMPORTAR ESTO
+import '../widgets/semester_summary_card.dart';
 import 'course_grades_screen.dart';
 
 class CoursesListScreen extends StatefulWidget {
@@ -15,21 +16,43 @@ class CoursesListScreen extends StatefulWidget {
 }
 
 class _CoursesListScreenState extends State<CoursesListScreen> {
-  // --- Formulario para agregar curso (Sin cambios) ---
-  void _showAddCourseForm(BuildContext context) {
-    final nameController = TextEditingController();
-    final creditsController = TextEditingController(text: '3');
-    final profController = TextEditingController();
+  // --- FORMULARIO HÍBRIDO (CREAR / EDITAR) ---
+  // Ahora recibe un parámetro opcional 'courseToEdit'
+  void _showCourseForm(BuildContext context, {Course? courseToEdit}) {
+    final isEditing = courseToEdit != null;
+
+    // Si estamos editando, rellenamos los campos. Si no, van vacíos.
+    final nameController =
+        TextEditingController(text: isEditing ? courseToEdit.name : '');
+    final creditsController = TextEditingController(
+        text: isEditing ? courseToEdit.credits.toString() : '3');
+    final profController = TextEditingController(
+        text: isEditing ? courseToEdit.professorName : '');
 
     Future<void> submitForm() async {
       if (nameController.text.isEmpty) return;
-      final service = HiveDataService();
-      final newCourse = Course()
-        ..name = nameController.text
-        ..credits = int.tryParse(creditsController.text) ?? 0
-        ..professorName = profController.text
-        ..semesterId = widget.semester.key;
-      await service.saveCourse(newCourse);
+
+      if (isEditing) {
+        // --- LÓGICA DE EDICIÓN ---
+        // Actualizamos las propiedades del objeto existente
+        courseToEdit.name = nameController.text;
+        courseToEdit.credits = int.tryParse(creditsController.text) ?? 0;
+        courseToEdit.professorName = profController.text;
+
+        // ¡MAGIA DE HIVE! .save() actualiza el registro en la base de datos
+        await courseToEdit.save();
+      } else {
+        // --- LÓGICA DE CREACIÓN ---
+        final service = HiveDataService();
+        final newCourse = Course()
+          ..name = nameController.text
+          ..credits = int.tryParse(creditsController.text) ?? 0
+          ..professorName = profController.text
+          ..semesterId =
+              widget.semester.key; // Usamos la key del semestre padre
+        await service.saveCourse(newCourse);
+      }
+
       if (context.mounted) Navigator.pop(context);
     }
 
@@ -49,9 +72,10 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Nuevo Curso 📚',
+              Text(isEditing ? 'Editar Curso ✏️' : 'Nuevo Curso 📚',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
               TextField(
                 controller: nameController,
@@ -95,12 +119,60 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                 onPressed: submitForm,
                 style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15)),
-                child: const Text('GUARDAR CURSO'),
+                child: Text(isEditing ? 'ACTUALIZAR DATOS' : 'GUARDAR CURSO'),
               )
             ],
           ),
         );
       },
+    );
+  }
+
+  // --- FUNCIÓN DE BORRADO BLINDADA ---
+  void _deleteCourse(BuildContext context, Course course) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Evita cerrar tocando afuera mientras borra
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Borrar curso?"),
+        content: Text("Se eliminará '${course.name}' y todas sus notas."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
+            onPressed: () async {
+              // 1. GUARDAR REFERENCIA
+              final navigator = Navigator.of(ctx);
+
+              try {
+                if (course.isInBox) {
+                  // ... Lógica de borrado de notas ...
+                  final boxEvaluations =
+                      Hive.box<Evaluation>(HiveDataService.boxEvaluations);
+                  final evaluacionesBorrar = boxEvaluations.values
+                      .where((ev) => ev.courseId == course.key)
+                      .map((ev) => ev.key)
+                      .toList();
+
+                  if (evaluacionesBorrar.isNotEmpty) {
+                    await boxEvaluations.deleteAll(evaluacionesBorrar);
+                  }
+
+                  await course.delete();
+                }
+              } catch (e) {
+                print("Error: $e");
+              } finally {
+                // 2. CERRAR USANDO LA REFERENCIA
+                navigator.pop();
+              }
+            },
+            child: const Text("Borrar", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -114,7 +186,6 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         valueListenable:
             Hive.box<Course>(HiveDataService.boxCourses).listenable(),
         builder: (context, Box<Course> box, _) {
-          // Filtramos cursos del semestre actual
           final courses = box.values
               .where((c) => c.semesterId == widget.semester.key)
               .toList();
@@ -133,16 +204,12 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
             );
           }
 
-          // --- CAMBIO PRINCIPAL AQUÍ ---
           return Column(
             children: [
-              // 1. La Tarjeta de Resumen Arriba
               SemesterSummaryCard(
                 semestreNombre: widget.semester.name,
                 cursos: courses,
               ),
-
-              // 2. La Lista de Cursos Abajo
               Expanded(
                 child: ListView.builder(
                   itemCount: courses.length,
@@ -150,6 +217,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                   itemBuilder: (context, index) {
                     final course = courses[index];
                     return Card(
+                      key: ValueKey(course.key),
                       elevation: 2,
                       child: ListTile(
                         leading: CircleAvatar(
@@ -161,7 +229,44 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                                 const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
                             "Prof: ${course.professorName!.isNotEmpty ? course.professorName : 'Sin asignar'} • ${course.credits} créditos"),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+
+                        // --- AQUÍ ESTÁ EL MENÚ NUEVO (EDITAR / BORRAR) ---
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _showCourseForm(context, courseToEdit: course);
+                            } else if (value == 'delete') {
+                              _deleteCourse(context, course);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) =>
+                              <PopupMenuEntry<String>>[
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 20),
+                                  SizedBox(width: 10),
+                                  Text('Editar')
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete,
+                                      color: Colors.red, size: 20),
+                                  SizedBox(width: 10),
+                                  Text('Borrar',
+                                      style: TextStyle(color: Colors.red))
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        // -------------------------------------------------
+
                         onTap: () {
                           Navigator.push(
                             context,
@@ -181,7 +286,8 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddCourseForm(context),
+        onPressed: () =>
+            _showCourseForm(context), // Modo crear (sin argumentos)
         child: const Icon(Icons.add),
       ),
     );

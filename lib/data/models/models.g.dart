@@ -57,26 +57,23 @@ class CourseAdapter extends TypeAdapter<Course> {
     };
     return Course()
       ..name = fields[0] as String
-      ..professorName = fields[1] as String?
-      ..credits = fields[2] as int
-      ..color = fields[3] as String
-      ..semesterId = fields[4] as int;
+      ..credits = fields[1] as int
+      ..semesterId = fields[2] as int
+      ..professorName = fields[3] as String?;
   }
 
   @override
   void write(BinaryWriter writer, Course obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
-      ..write(obj.professorName)
-      ..writeByte(2)
       ..write(obj.credits)
+      ..writeByte(2)
+      ..write(obj.semesterId)
       ..writeByte(3)
-      ..write(obj.color)
-      ..writeByte(4)
-      ..write(obj.semesterId);
+      ..write(obj.professorName);
   }
 
   @override
@@ -102,7 +99,7 @@ class EvaluationAdapter extends TypeAdapter<Evaluation> {
     };
     return Evaluation()
       ..name = fields[0] as String
-      ..scoreObtained = fields[1] as double?
+      ..score = fields[1] as double?
       ..weight = fields[2] as double
       ..courseId = fields[3] as int;
   }
@@ -114,7 +111,7 @@ class EvaluationAdapter extends TypeAdapter<Evaluation> {
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
-      ..write(obj.scoreObtained)
+      ..write(obj.score)
       ..writeByte(2)
       ..write(obj.weight)
       ..writeByte(3)
