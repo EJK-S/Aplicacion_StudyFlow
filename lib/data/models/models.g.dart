@@ -180,3 +180,42 @@ class ClassSessionAdapter extends TypeAdapter<ClassSession> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+
+class StudySessionAdapter extends TypeAdapter<StudySession> {
+  @override
+  final int typeId = 4;
+
+  @override
+  StudySession read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return StudySession()
+      ..courseId = fields[0] as int
+      ..date = fields[1] as DateTime
+      ..durationMinutes = fields[2] as int;
+  }
+
+  @override
+  void write(BinaryWriter writer, StudySession obj) {
+    writer
+      ..writeByte(3)
+      ..writeByte(0)
+      ..write(obj.courseId)
+      ..writeByte(1)
+      ..write(obj.date)
+      ..writeByte(2)
+      ..write(obj.durationMinutes);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StudySessionAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}

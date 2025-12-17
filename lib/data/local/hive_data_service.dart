@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/models.dart';
 
@@ -6,6 +7,7 @@ class HiveDataService {
   static const boxSemesters = 'semestersBox';
   static const boxCourses = 'coursesBox';
   static const boxEvaluations = 'evaluationsBox';
+  static const String boxStudySessions = 'studySessionsBox';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -15,12 +17,14 @@ class HiveDataService {
     Hive.registerAdapter(CourseAdapter());
     Hive.registerAdapter(EvaluationAdapter());
     Hive.registerAdapter(ClassSessionAdapter());
+    Hive.registerAdapter(StudySessionAdapter());
 
     // Abrir las cajas
     await Hive.openBox<Semester>(boxSemesters);
     await Hive.openBox<Course>(boxCourses);
     await Hive.openBox<Evaluation>(boxEvaluations);
     await Hive.openBox('settingsBox');
+    await Hive.openBox<StudySession>(boxStudySessions);
   }
 
   // --- SEMESTRES ---
@@ -58,5 +62,14 @@ class HiveDataService {
   List<Evaluation> getEvaluationsFor(int courseId) {
     final box = Hive.box<Evaluation>(boxEvaluations);
     return box.values.where((e) => e.courseId == courseId).toList();
+  }
+
+  Future<void> saveStudySession(StudySession session) async {
+    final box = Hive.box<StudySession>(boxStudySessions);
+    await box.add(session);
+    if (kDebugMode) {
+      print(
+          "✅ Sesión guardada: ${session.durationMinutes} min para curso ${session.courseId}");
+    }
   }
 }

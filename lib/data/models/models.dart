@@ -122,3 +122,23 @@ class ClassSession {
     };
   }
 }
+
+@HiveType(typeId: 4)
+class StudySession extends HiveObject {
+  @HiveField(0)
+  late int courseId; // ID del curso estudiado (-1 si es estudio general)
+
+  @HiveField(1)
+  late DateTime date; // Cuándo ocurrió
+
+  @HiveField(2)
+  late int durationMinutes; // Cuánto duró (ej: 25)
+
+  Map<String, dynamic> toJson() {
+    return {
+      'courseId': courseId,
+      'date': date.toIso8601String(),
+      'durationMinutes': durationMinutes,
+    };
+  }
+}

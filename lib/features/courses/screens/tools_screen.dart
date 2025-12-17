@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_studyflow/features/tools/screens/pdf_generator_screen.dart'; // Tu generador de PDF
+import 'package:flutter_studyflow/features/tools/screens/pdf_generator_screen.dart';
 import 'apa_generator_screen.dart';
-import 'laccei_tool_screen.dart'; // 👈 1. IMPORTANTE: Importamos la pantalla de LACCEI
+import 'laccei_tool_screen.dart';
+import 'pomodoro_screen.dart';
 
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key});
@@ -59,6 +60,21 @@ class ToolsScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                       builder: (context) => const LacceiToolScreen()),
+                );
+              },
+            ),
+
+            // HERRAMIENTA 4: POMODORO (Ahora sí funcional)
+            _ToolCard(
+              icon: Icons.timer,
+              color: Colors.redAccent,
+              title: "Reloj Pomodoro",
+              description: "Técnica de estudio 25/5.",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const PomodoroScreen()),
                 );
               },
             ),
