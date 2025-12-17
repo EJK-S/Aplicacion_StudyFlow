@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_studyflow/features/tools/screens/pdf_generator_screen.dart';
-import 'apa_generator_screen.dart'; // Crearemos esto en el paso 2
+import 'package:flutter_studyflow/features/tools/screens/pdf_generator_screen.dart'; // Tu generador de PDF
+import 'apa_generator_screen.dart';
+import 'laccei_tool_screen.dart'; // 👈 1. IMPORTANTE: Importamos la pantalla de LACCEI
 
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key});
@@ -12,7 +13,7 @@ class ToolsScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: GridView.count(
-          crossAxisCount: 2, // 2 columnas
+          crossAxisCount: 2,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           children: [
@@ -31,14 +32,13 @@ class ToolsScreen extends StatelessWidget {
               },
             ),
 
-            // HERRAMIENTA 2: CARÁTULA (Próximamente)
+            // HERRAMIENTA 2: CARÁTULA
             _ToolCard(
               icon: Icons.picture_as_pdf,
               color: Colors.redAccent,
               title: "Carátula PDF",
               description: "Informes de Labo y Trabajos.",
               onTap: () {
-                // 👇 AHORA SÍ NAVEGAMOS
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -47,13 +47,20 @@ class ToolsScreen extends StatelessWidget {
               },
             ),
 
-            // MÁS HERRAMIENTAS (Ideas futuras)
+            // HERRAMIENTA 3: LACCEI (CORREGIDO)
             _ToolCard(
               icon: Icons.article,
               color: Colors.blueAccent,
               title: "Plantilla LACCEI",
               description: "Formato paper estándar.",
-              onTap: () {},
+              onTap: () {
+                // 👇 2. AQUÍ ESTABA EL ERROR (Ahora ya navegamos)
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const LacceiToolScreen()),
+                );
+              },
             ),
           ],
         ),
@@ -62,7 +69,7 @@ class ToolsScreen extends StatelessWidget {
   }
 }
 
-// Widget auxiliar para que las tarjetas se vean bonitas
+// Widget auxiliar (Este se queda igual)
 class _ToolCard extends StatelessWidget {
   final IconData icon;
   final Color color;

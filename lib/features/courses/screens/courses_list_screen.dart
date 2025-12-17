@@ -16,116 +16,356 @@ class CoursesListScreen extends StatefulWidget {
 }
 
 class _CoursesListScreenState extends State<CoursesListScreen> {
-  // --- FORMULARIO HÍBRIDO (CREAR / EDITAR) ---
-  // Ahora recibe un parámetro opcional 'courseToEdit'
+  // --- FORMULARIO ACTUALIZADO CON HORARIOS ---
   void _showCourseForm(BuildContext context, {Course? courseToEdit}) {
     final isEditing = courseToEdit != null;
 
-    // Si estamos editando, rellenamos los campos. Si no, van vacíos.
+    // Controladores de Texto
     final nameController =
         TextEditingController(text: isEditing ? courseToEdit.name : '');
     final creditsController = TextEditingController(
         text: isEditing ? courseToEdit.credits.toString() : '3');
     final profController = TextEditingController(
         text: isEditing ? courseToEdit.professorName : '');
+    final sectionController =
+        TextEditingController(text: isEditing ? courseToEdit.section : '');
+
+    // Lista temporal para guardar los horarios antes de dar "Guardar"
+    // (Si editamos, copiamos la lista existente. Si es nuevo, lista vacía)
+    List<ClassSession> tempSessions =
+        isEditing ? List.from(courseToEdit.schedules) : [];
 
     Future<void> submitForm() async {
       if (nameController.text.isEmpty) return;
 
-      if (isEditing) {
-        // --- LÓGICA DE EDICIÓN ---
-        // Actualizamos las propiedades del objeto existente
-        courseToEdit.name = nameController.text;
-        courseToEdit.credits = int.tryParse(creditsController.text) ?? 0;
-        courseToEdit.professorName = profController.text;
+      final service = HiveDataService();
 
-        // ¡MAGIA DE HIVE! .save() actualiza el registro en la base de datos
+      // Datos comunes
+      final name = nameController.text;
+      final credits = int.tryParse(creditsController.text) ?? 0;
+      final prof = profController.text;
+      final section = sectionController.text;
+
+      if (isEditing) {
+        // ACTUALIZAR
+        courseToEdit.name = name;
+        courseToEdit.credits = credits;
+        courseToEdit.professorName = prof;
+        courseToEdit.section = section;
+        courseToEdit.schedules = tempSessions; // Guardamos la lista nueva
         await courseToEdit.save();
       } else {
-        // --- LÓGICA DE CREACIÓN ---
-        final service = HiveDataService();
+        // CREAR NUEVO
         final newCourse = Course()
-          ..name = nameController.text
-          ..credits = int.tryParse(creditsController.text) ?? 0
-          ..professorName = profController.text
-          ..semesterId =
-              widget.semester.key; // Usamos la key del semestre padre
+          ..name = name
+          ..credits = credits
+          ..professorName = prof
+          ..semesterId = widget.semester.key
+          ..section = section
+          ..schedules = tempSessions; // Guardamos la lista
+
         await service.saveCourse(newCourse);
       }
 
       if (context.mounted) Navigator.pop(context);
     }
 
+    // Abrimos el BottomSheet
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              left: 16,
-              right: 16,
-              top: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(isEditing ? 'Editar Curso ✏️' : 'Nuevo Curso 📚',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                    labelText: 'Nombre (Ej: Cálculo II)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.book)),
-                autofocus: true,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: creditsController,
-                      keyboardType: TextInputType.number,
+        // Usamos StatefulBuilder para poder actualizar la lista de horarios visualmente
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  left: 16,
+                  right: 16,
+                  top: 16),
+              child: SingleChildScrollView(
+                // Para que no tape el teclado
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(isEditing ? 'Editar Curso ✏️' : 'Nuevo Curso 📚',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 15),
+
+                    // 1. NOMBRE
+                    TextField(
+                      controller: nameController,
                       decoration: const InputDecoration(
-                          labelText: 'Créditos',
+                          labelText: 'Nombre (Ej: Cálculo II)',
                           border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.numbers)),
+                          prefixIcon: Icon(Icons.book)),
                       textInputAction: TextInputAction.next,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
+                    const SizedBox(height: 10),
+
+                    // 2. CRÉDITOS Y SECCIÓN
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: creditsController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                labelText: 'Créditos',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.numbers)),
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: sectionController,
+                            decoration: const InputDecoration(
+                                labelText: 'Sección (Ej: G1)',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.group)),
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 3. PROFESOR
+                    TextField(
                       controller: profController,
                       decoration: const InputDecoration(
                           labelText: 'Profesor (Opcional)',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.person)),
                       textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => submitForm(),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+
+                    // 4. SECCIÓN DE HORARIOS (DINÁMICA)
+                    const Text("Horarios ⏰",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
+
+                    // Lista visual de horarios agregados
+                    if (tempSessions.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                            // ignore: deprecated_member_use
+                            color: Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: const Text("Sin horarios definidos",
+                            style: TextStyle(color: Colors.grey)),
+                      )
+                    else
+                      ...tempSessions.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final session = entry.value;
+                        final dias = [
+                          "",
+                          "Lun",
+                          "Mar",
+                          "Mié",
+                          "Jue",
+                          "Vie",
+                          "Sáb",
+                          "Dom"
+                        ];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 5),
+                          color: Colors.blueGrey.shade900,
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.access_time,
+                                color: Colors.amber, size: 20),
+                            title: Text(
+                                "${dias[session.dayIndex]} ${session.startHour}:00 - ${session.startHour + session.durationHours}:00"),
+                            subtitle: Text(
+                                "${session.type} • Aula: ${session.classroom}"),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.red, size: 18),
+                              onPressed: () {
+                                setModalState(() {
+                                  tempSessions.removeAt(index);
+                                });
+                              },
+                            ),
+                          ),
+                        );
+                      }),
+
+                    // Botón para agregar horario
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        // Abrimos el diálogo para crear una sesión
+                        final newSession = await _showAddSessionDialog(context);
+                        if (newSession != null) {
+                          setModalState(() {
+                            tempSessions.add(newSession);
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.add_alarm),
+                      label: const Text("Agregar Horario"),
+                    ),
+
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: submitForm,
+                      style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 15)),
+                      child: Text(
+                          isEditing ? 'ACTUALIZAR CURSO' : 'GUARDAR CURSO'),
+                    )
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: submitForm,
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15)),
-                child: Text(isEditing ? 'ACTUALIZAR DATOS' : 'GUARDAR CURSO'),
-              )
-            ],
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  // --- SUB-DIALOGO PARA AGREGAR UNA SESIÓN (Día, Hora, Aula) ---
+  Future<ClassSession?> _showAddSessionDialog(BuildContext context) async {
+    // Valores iniciales
+    int selectedDay = 1; // Lunes
+    int startHour = 8; // 8 AM
+    int duration = 2; // 2 horas
+    String type = "Teoría";
+    final roomController = TextEditingController(text: "S/N");
+
+    final dias = [
+      "Lunes",
+      "Martes",
+      "Miércoles",
+      "Jueves",
+      "Viernes",
+      "Sábado",
+      "Domingo"
+    ];
+    final tipos = ["Teoría", "Práctica", "Laboratorio", "Seminario"];
+
+    return showDialog<ClassSession>(
+        context: context,
+        builder: (ctx) {
+          // Usamos StatefulBuilder aquí también para los dropdowns internos
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: const Text("Agregar Sesión"),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 1. DÍA
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedDay,
+                      decoration: const InputDecoration(labelText: "Día"),
+                      items: List.generate(
+                          7,
+                          (index) => DropdownMenuItem(
+                                value: index + 1,
+                                child: Text(dias[index]),
+                              )),
+                      onChanged: (v) => setState(() => selectedDay = v!),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 2. HORA Y DURACIÓN
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            initialValue: startHour,
+                            decoration:
+                                const InputDecoration(labelText: "Inicio"),
+                            items: List.generate(
+                                16,
+                                (index) => DropdownMenuItem(
+                                      // De 7 a 22
+                                      value: index + 7,
+                                      child: Text("${index + 7}:00"),
+                                    )),
+                            onChanged: (v) => setState(() => startHour = v!),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            initialValue: duration,
+                            decoration: const InputDecoration(
+                                labelText: "Duración (h)"),
+                            items: [1, 2, 3, 4, 5]
+                                .map((h) => DropdownMenuItem(
+                                    value: h, child: Text("$h h")))
+                                .toList(),
+                            onChanged: (v) => setState(() => duration = v!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 3. TIPO Y AULA
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: type,
+                            decoration:
+                                const InputDecoration(labelText: "Tipo"),
+                            items: tipos
+                                .map((t) =>
+                                    DropdownMenuItem(value: t, child: Text(t)))
+                                .toList(),
+                            onChanged: (v) => setState(() => type = v!),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: roomController,
+                            decoration:
+                                const InputDecoration(labelText: "Aula"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancelar")),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Retornamos el objeto ClassSession nuevo
+                      final session = ClassSession(
+                        dayIndex: selectedDay,
+                        startHour: startHour,
+                        durationHours: duration,
+                        classroom: roomController.text,
+                        type: type,
+                      );
+                      Navigator.pop(context, session);
+                    },
+                    child: const Text("Agregar"),
+                  )
+                ],
+              );
+            },
+          );
+        });
   }
 
   // --- FUNCIÓN DE BORRADO BLINDADA ---
@@ -163,7 +403,9 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                   await course.delete();
                 }
               } catch (e) {
-                print("Error: $e");
+                if (kDebugMode) {
+                  print("Error: $e");
+                }
               } finally {
                 // 2. CERRAR USANDO LA REFERENCIA
                 navigator.pop();

@@ -14,11 +14,13 @@ class HiveDataService {
     Hive.registerAdapter(SemesterAdapter());
     Hive.registerAdapter(CourseAdapter());
     Hive.registerAdapter(EvaluationAdapter());
+    Hive.registerAdapter(ClassSessionAdapter());
 
     // Abrir las cajas
     await Hive.openBox<Semester>(boxSemesters);
     await Hive.openBox<Course>(boxCourses);
     await Hive.openBox<Evaluation>(boxEvaluations);
+    await Hive.openBox('settingsBox');
   }
 
   // --- SEMESTRES ---

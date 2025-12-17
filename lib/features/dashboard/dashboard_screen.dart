@@ -1,15 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_studyflow/features/courses/widgets/semester_summary_card.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // <--- Importante para escuchar cambios
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/local/hive_data_service.dart';
 import '../../data/models/models.dart';
+import '../courses/widgets/semester_summary_card.dart';
 import 'semesters_list.dart';
 import 'main_drawer.dart';
 
-class DashboardScreen extends StatelessWidget {
+// 👇 IMPORTS DE LAS PESTAÑAS
+import '../schedule/screens/schedule_screen.dart'; // 1. Tu Horario Nuevo
+import '../courses/screens/courses_list_screen.dart'; // 2. Lista de Cursos
+import '../courses/screens/tools_screen.dart'; // 3. Herramientas
+
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
-  // --- (Tu función _showAddSemesterForm se queda IGUAL, no la toques) ---
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _selectedIndex = 0; // Controla qué pestaña estamos viendo (0: Inicio)
+
+  // --- LISTA DE PÁGINAS ---
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      const HomeTab(), // Index 0: Lo que tenías antes (Resumen + Lista)
+      const CurrentSemesterCoursesTab(), // Index 1: Cursos del ciclo actual
+      const ScheduleScreen(), // Index 2: EL HORARIO 🗓️
+      const ToolsScreen(), // Index 3: Herramientas
+    ];
+  }
+
+  // --- FUNCIÓN PARA AGREGAR SEMESTRE (Solo se usa en la pestaña 0) ---
   void _showAddSemesterForm(BuildContext context) {
     final nameController = TextEditingController();
     bool isCurrent = true;
@@ -18,7 +44,6 @@ class DashboardScreen extends StatelessWidget {
       if (nameController.text.isEmpty) return;
       final service = HiveDataService();
 
-      // Pequeño truco: Si este es el nuevo "Actual", desmarcamos los anteriores
       if (isCurrent) {
         final box = Hive.box<Semester>(HiveDataService.boxSemesters);
         for (var s in box.values) {
@@ -60,7 +85,7 @@ class DashboardScreen extends StatelessWidget {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                    labelText: 'Nombre del Ciclo (Ej: 2026-I)',
+                    labelText: 'Nombre (Ej: 2026-I)',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.school)),
                 autofocus: true,
@@ -88,71 +113,137 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       drawer: const MainDrawer(),
       appBar: AppBar(
-        title: const Text(
-            'StudyFlow 🚀'), // Cambio de nombre para que se vea más Pro
+        title: const Text('StudyFlow 🚀'),
         centerTitle: true,
       ),
-      // AQUÍ OCURRE LA MAGIA DEL DASHBOARD
-      body: Column(
-        children: [
-          // 1. EL DASHBOARD GLOBAL (Resumen del ciclo actual)
-          ValueListenableBuilder(
-            valueListenable:
-                Hive.box<Semester>(HiveDataService.boxSemesters).listenable(),
-            builder: (context, Box<Semester> boxSemesters, _) {
-              // Buscamos si hay algún semestre marcado como "Actual"
-              Semester? currentSemester;
-              try {
-                currentSemester =
-                    boxSemesters.values.firstWhere((s) => s.isCurrent);
-              } catch (e) {
-                currentSemester = null;
-              }
+      // Muestra la página según el índice seleccionado
+      body: _pages[_selectedIndex],
 
-              // Si no hay ciclo actual, no mostramos el resumen
-              if (currentSemester == null) return const SizedBox.shrink();
-
-              // Si HAY ciclo actual, necesitamos sus cursos para llenar la tarjeta
-              return ValueListenableBuilder(
-                valueListenable:
-                    Hive.box<Course>(HiveDataService.boxCourses).listenable(),
-                builder: (context, Box<Course> boxCourses, _) {
-                  final courses = boxCourses.values
-                      .where((c) => c.semesterId == currentSemester!.key)
-                      .toList();
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(left: 16, top: 10),
-                        child: Text("Tu Resumen Actual",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey)),
-                      ),
-                      // Aquí reutilizamos tu componente estrella
-                      SemesterSummaryCard(
-                          semestreNombre: currentSemester!.name,
-                          cursos: courses),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
-
-          // 2. LA LISTA DE SEMESTRES (Historial)
-          const Expanded(
-            child: SemestersListScreen(),
-          ),
+      // 👇 BARRA DE NAVEGACIÓN INFERIOR
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (int index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home), label: 'Inicio'),
+          NavigationDestination(icon: Icon(Icons.book), label: 'Cursos'),
+          NavigationDestination(
+              icon: Icon(Icons.calendar_month),
+              label: 'Horario'), // <--- AQUÍ ESTÁ
+          NavigationDestination(icon: Icon(Icons.build), label: 'Herramientas'),
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddSemesterForm(context),
-        child: const Icon(Icons.add),
-      ),
+      // El botón flotante solo aparece en la pestaña de Inicio (0)
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: () => _showAddSemesterForm(context),
+              child: const Icon(Icons.add),
+            )
+          : null,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WIDGET 1: PESTAÑA DE INICIO (HOME TAB)
+// ---------------------------------------------------------------------------
+// Este es el código que tenías antes en el body, ahora empaquetado.
+class HomeTab extends StatelessWidget {
+  const HomeTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 1. EL DASHBOARD GLOBAL (Resumen del ciclo actual)
+        ValueListenableBuilder(
+          valueListenable:
+              Hive.box<Semester>(HiveDataService.boxSemesters).listenable(),
+          builder: (context, Box<Semester> boxSemesters, _) {
+            Semester? currentSemester;
+            try {
+              currentSemester =
+                  boxSemesters.values.firstWhere((s) => s.isCurrent);
+            } catch (e) {
+              currentSemester = null;
+            }
+
+            if (currentSemester == null) return const SizedBox.shrink();
+
+            return ValueListenableBuilder(
+              valueListenable:
+                  Hive.box<Course>(HiveDataService.boxCourses).listenable(),
+              builder: (context, Box<Course> boxCourses, _) {
+                final courses = boxCourses.values
+                    .where((c) => c.semesterId == currentSemester!.key)
+                    .toList();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 16, top: 10),
+                      child: Text("Tu Resumen Actual",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ),
+                    SemesterSummaryCard(
+                        semestreNombre: currentSemester!.name, cursos: courses),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+
+        // 2. LA LISTA DE SEMESTRES (Historial)
+        const Expanded(
+          child: SemestersListScreen(),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WIDGET 2: PESTAÑA DE CURSOS ACTUALES (WRAPPER INTELIGENTE)
+// ---------------------------------------------------------------------------
+// Busca automáticamente el semestre activo para mostrar sus cursos
+class CurrentSemesterCoursesTab extends StatelessWidget {
+  const CurrentSemesterCoursesTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable:
+          Hive.box<Semester>(HiveDataService.boxSemesters).listenable(),
+      builder: (context, Box<Semester> box, _) {
+        try {
+          final currentSemester = box.values.firstWhere((s) => s.isCurrent);
+          // Si hay semestre actual, mostramos su lista de cursos
+          return CoursesListScreen(semester: currentSemester);
+        } catch (e) {
+          // Si no hay semestre activo, mostramos un aviso
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.school_outlined, size: 60, color: Colors.grey),
+                SizedBox(height: 10),
+                Text("No tienes un ciclo activo",
+                    style: TextStyle(fontSize: 18)),
+                SizedBox(height: 5),
+                Text("Ve a Inicio y crea o activa uno.",
+                    style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        }
+      },
     );
   }
 }

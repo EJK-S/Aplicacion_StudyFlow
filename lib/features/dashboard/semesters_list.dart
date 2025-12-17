@@ -91,7 +91,9 @@ class _SemestersListScreenState extends State<SemestersListScreen> {
                   await semester.delete();
                 }
               } catch (e) {
-                print("Error al borrar: $e");
+                if (kDebugMode) {
+                  print("Error al borrar: $e");
+                }
               } finally {
                 // 2. USAMOS LA REFERENCIA GUARDADA PARA CERRAR EL DIÁLOGO SIEMPRE
                 navigator.pop();
