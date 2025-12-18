@@ -47,6 +47,9 @@ class Course extends HiveObject {
   @HiveField(5)
   List<ClassSession> schedules = [];
 
+  @HiveField(6)
+  List<Evaluation> evaluations = [];
+
   Map<String, dynamic> toJson() {
     return {
       'id': key,
@@ -72,6 +75,8 @@ class Evaluation extends HiveObject {
   late double weight;
   @HiveField(3)
   late int courseId;
+  @HiveField(4)
+  DateTime? date;
 
   double? get scoreObtained => score;
 
@@ -81,6 +86,7 @@ class Evaluation extends HiveObject {
       'score': score,
       'weight': weight,
       'courseId': courseId,
+      'date': date?.toIso8601String(),
     };
   }
 }

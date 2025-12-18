@@ -61,13 +61,14 @@ class CourseAdapter extends TypeAdapter<Course> {
       ..semesterId = fields[2] as int
       ..professorName = fields[3] as String?
       ..section = fields[4] as String?
-      ..schedules = (fields[5] as List).cast<ClassSession>();
+      ..schedules = (fields[5] as List).cast<ClassSession>()
+      ..evaluations = (fields[6] as List).cast<Evaluation>();
   }
 
   @override
   void write(BinaryWriter writer, Course obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -79,7 +80,9 @@ class CourseAdapter extends TypeAdapter<Course> {
       ..writeByte(4)
       ..write(obj.section)
       ..writeByte(5)
-      ..write(obj.schedules);
+      ..write(obj.schedules)
+      ..writeByte(6)
+      ..write(obj.evaluations);
   }
 
   @override
@@ -107,13 +110,14 @@ class EvaluationAdapter extends TypeAdapter<Evaluation> {
       ..name = fields[0] as String
       ..score = fields[1] as double?
       ..weight = fields[2] as double
-      ..courseId = fields[3] as int;
+      ..courseId = fields[3] as int
+      ..date = fields[4] as DateTime?;
   }
 
   @override
   void write(BinaryWriter writer, Evaluation obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -121,7 +125,9 @@ class EvaluationAdapter extends TypeAdapter<Evaluation> {
       ..writeByte(2)
       ..write(obj.weight)
       ..writeByte(3)
-      ..write(obj.courseId);
+      ..write(obj.courseId)
+      ..writeByte(4)
+      ..write(obj.date);
   }
 
   @override
