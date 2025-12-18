@@ -115,7 +115,9 @@ class _StudyPieChartState extends State<StudyPieChart> {
             ),
             const SizedBox(height: 10),
             Text(
-                "Total acumulado: ${(totalMinutes / 60).toStringAsFixed(1)} horas",
+                totalMinutes < 60
+                    ? "Total acumulado: $totalMinutes min"
+                    : "Total acumulado: ${(totalMinutes / 60).toStringAsFixed(1)} horas",
                 style: const TextStyle(color: Colors.grey))
           ],
         );

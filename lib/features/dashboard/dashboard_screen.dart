@@ -11,6 +11,7 @@ import '../schedule/screens/schedule_screen.dart'; // 1. Tu Horario Nuevo
 import '../courses/screens/courses_list_screen.dart'; // 2. Lista de Cursos
 import '../courses/screens/tools_screen.dart'; // 3. Herramientas
 import 'widgets/study_pie_chart.dart';
+import 'widgets/insights_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -212,6 +213,8 @@ class HomeTab extends StatelessWidget {
             ),
           ),
         ),
+
+        const InsightsCard(),
 
         // 2. LA LISTA DE SEMESTRES (Historial)
         const Expanded(
