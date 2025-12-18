@@ -14,8 +14,9 @@ class PomodoroScreen extends StatefulWidget {
 
 class _PomodoroScreenState extends State<PomodoroScreen> {
   // CONFIGURACIÓN (En segundos)
-  // static const int focusTime = 5; // ⚡ MODO PRUEBA RÁPIDA (Descomentar para probar)
-  static const int focusTime = 25 * 60;
+  static const int focusTime =
+      5; // ⚡ MODO PRUEBA RÁPIDA (Descomentar para probar)
+  // static const int focusTime = 25 * 60;
   static const int breakTime = 5 * 60;
 
   int timeLeft = focusTime;
@@ -77,8 +78,9 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
       final session = StudySession()
         ..courseId = selectedCourseId ?? -1 // -1 significa "General"
         ..date = DateTime.now()
-        ..durationMinutes =
-            (focusTime / 60).round(); // Guardamos 25 min (o lo que configures)
+        ..durationMinutes = (focusTime / 60).ceil();
+      //..durationMinutes =
+      //(focusTime / 60).round(); // Guardamos 25 min (o lo que configures)
 
       await HiveDataService().saveStudySession(session);
     }

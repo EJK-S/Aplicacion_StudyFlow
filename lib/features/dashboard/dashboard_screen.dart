@@ -10,6 +10,7 @@ import 'main_drawer.dart';
 import '../schedule/screens/schedule_screen.dart'; // 1. Tu Horario Nuevo
 import '../courses/screens/courses_list_screen.dart'; // 2. Lista de Cursos
 import '../courses/screens/tools_screen.dart'; // 3. Herramientas
+import 'widgets/study_pie_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -198,6 +199,18 @@ class HomeTab extends StatelessWidget {
               },
             );
           },
+        ),
+
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Card(
+            // Lo envolvemos en una Card para que se vea elegante
+            elevation: 2,
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: StudyPieChart(), // <--- ¡AQUÍ ESTÁ!
+            ),
+          ),
         ),
 
         // 2. LA LISTA DE SEMESTRES (Historial)
