@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_studyflow/features/tools/screens/pdf_generator_screen.dart';
 import 'apa_generator_screen.dart';
-import 'laccei_tool_screen.dart';
-import 'pomodoro_screen.dart';
+import '../../tools/screens/laccei_tool_screen.dart';
+import '../../tools/screens/pomodoro_screen.dart';
 
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key});
