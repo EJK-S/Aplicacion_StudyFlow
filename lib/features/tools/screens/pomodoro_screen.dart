@@ -13,11 +13,9 @@ class PomodoroScreen extends StatefulWidget {
 }
 
 class _PomodoroScreenState extends State<PomodoroScreen> {
-  // CONFIGURACIÓN (En segundos)
-  static const int focusTime =
-      5; // ⚡ MODO PRUEBA RÁPIDA (Descomentar para probar)
-  // static const int focusTime = 25 * 60;
-  static const int breakTime = 5 * 60;
+  static const int focusTime = 25 * 60; // ✅ MODO REAL (25 Minutos)
+
+  static const int breakTime = 5 * 60; // 5 Minutos de descanso
 
   int timeLeft = focusTime;
   bool isRunning = false;
