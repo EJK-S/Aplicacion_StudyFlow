@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/local/backup_service.dart';
 // Importamos la nueva pantalla de configuración que crearemos en el Paso 2
 import '../settings/settings_screen.dart';
+import 'screens/cycle_comparison_screen.dart';
 
 class MainDrawer extends StatelessWidget {
   const MainDrawer({super.key});
@@ -40,6 +41,18 @@ class MainDrawer extends StatelessWidget {
                   child: Icon(Icons.person, size: 40, color: Colors.blueAccent),
                 ),
               );
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.compare_arrows, color: Colors.amber),
+            title: const Text('Comparar Ciclos'),
+            onTap: () {
+              Navigator.pop(context); // Cerrar menú
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const CycleComparisonScreen()));
             },
           ),
 

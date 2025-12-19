@@ -13,55 +13,49 @@ class CourseGradesScreen extends StatefulWidget {
 }
 
 class _CourseGradesScreenState extends State<CourseGradesScreen> {
-  // Función matemática para calcular el promedio
+  // --- 1. LÓGICA DE CÁLCULO ---
   double _calculateAverage(List<Evaluation> evaluations) {
     double totalScore = 0;
     double totalWeight = 0;
 
     for (var eval in evaluations) {
       if (eval.scoreObtained != null) {
-        // Multiplicamos nota * peso (Ej: 18 * 0.30)
-        totalScore += eval.scoreObtained! *
-            (eval.weight / 100); // Asumimos peso en % (30%)
-        totalWeight += (eval.weight / 100);
+        // Soporte para pesos enteros (30) o decimales (0.3)
+        double peso = eval.weight > 1 ? eval.weight / 100 : eval.weight;
+        totalScore += eval.scoreObtained! * peso;
+        totalWeight += peso;
       }
     }
 
     if (totalWeight == 0) return 0.0;
-    return totalScore /
-        totalWeight; // Promedio ponderado real (sobre lo avanzado)
+    return totalScore / totalWeight;
   }
 
   String _getPrediction(List<Evaluation> evaluations) {
-    double totalAccumulatedPoints = 0; // Puntos que ya tienes en el bolsillo
-    double totalGradedWeight = 0; // Peso que ya se jugó (ej: 60%)
+    double totalAccumulatedPoints = 0;
+    double totalGradedWeight = 0;
 
     for (var eval in evaluations) {
       if (eval.scoreObtained != null) {
-        totalAccumulatedPoints += eval.scoreObtained! * (eval.weight / 100);
-        totalGradedWeight += eval.weight;
+        double peso = eval.weight > 1 ? eval.weight / 100 : eval.weight;
+        totalAccumulatedPoints += eval.scoreObtained! * peso;
+        totalGradedWeight += eval.weight > 1 ? eval.weight : eval.weight * 100;
       }
     }
 
-    // El peso que falta por evaluarse (El Futuro)
     double remainingWeight = 100 - totalGradedWeight;
 
-    // Si ya se evaluó todo (o casi todo)
-    if (remainingWeight <= 0) {
+    if (remainingWeight <= 0.1) {
+      // Margen de error pequeño
       return totalAccumulatedPoints >= 10.5
           ? "¡Felicidades! Ya aprobaste el curso 🎉"
           : "Lo siento, ya no hay puntos suficientes 💀";
     }
 
-    // Cálculo inverso: (Meta - LoQueTengo) / (PesoRestante%)
     double pointsNeeded = 10.5 - totalAccumulatedPoints;
-
-    if (pointsNeeded <= 0) {
-      return "¡Ya aprobaste! Solo mantén el ritmo 😎";
-    }
+    if (pointsNeeded <= 0) return "¡Ya aprobaste! Solo mantén el ritmo 😎";
 
     double gradeNeeded = pointsNeeded / (remainingWeight / 100);
-
     if (gradeNeeded > 20) {
       return "Necesitas $gradeNeeded... Matemáticamente imposible ⚰️";
     }
@@ -69,265 +63,340 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
     return "Necesitas promedio de ${gradeNeeded.toStringAsFixed(2)} en el ${remainingWeight.toInt()}% restante";
   }
 
-  // Formulario para agregar nota
-  void _showAddEvaluationForm(BuildContext context) {
-    final nameController = TextEditingController();
-    final scoreController = TextEditingController();
-    final weightController = TextEditingController();
-
-    // Lógica encapsulada
-    Future<void> submitForm() async {
-      // 1. Si falta el PESO o el NOMBRE, no hacemos nada (La nota sí puede faltar)
-      if (nameController.text.isEmpty || weightController.text.isEmpty) return;
-
-      // 2. IMPORTANTE: Cerrar el teclado antes de guardar para evitar congelamientos
-      FocusScope.of(context).unfocus();
-
-      final service = HiveDataService();
-
-      // 3. Crear el objeto
-      final newEval = Evaluation()
-        ..name = nameController.text
-        // LÓGICA SEGURA: Si el texto está vacío, guardamos 'null'. Si hay texto, convertimos a número.
-        ..score = scoreController.text.isEmpty
-            ? null
-            : double.tryParse(scoreController.text)
-        ..weight =
-            double.tryParse(weightController.text.replaceAll('%', '').trim()) ??
-                0.0
-        ..courseId = widget.course.key;
-
-      // 4. Guardar y Cerrar
-      await service.saveEvaluation(newEval);
-      if (context.mounted) Navigator.pop(context);
+  // --- 2. PLANTILLA SAN MARCOS (PARCIAL, FINAL, CONTINUO) ---
+  void _applySanMarcosTemplate() async {
+    // Verificar si ya tiene notas para no duplicar
+    if (widget.course.evaluations.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              "El curso ya tiene evaluaciones. Limpia la lista primero.")));
+      return;
     }
 
-    showModalBottomSheet(
+    // Estructura Clásica
+    final parcial = Evaluation()
+      ..name = "Examen Parcial"
+      ..weight = 30
+      ..courseId = widget.course.key as int;
+    final finalExam = Evaluation()
+      ..name = "Examen Final"
+      ..weight = 30
+      ..courseId = widget.course.key as int;
+    final continuo = Evaluation()
+      ..name = "Examen Continuo"
+      ..weight = 40
+      ..courseId = widget.course.key as int;
+
+    widget.course.evaluations.addAll([parcial, continuo, finalExam]);
+    await widget.course.save();
+
+    setState(() {}); // Refrescar pantalla
+  }
+
+  // --- 3. CALCULADORA DE SUB-NOTAS (Para el Examen Continuo) ---
+  Future<double?> _showSubGradeCalculator(BuildContext context) async {
+    // Lista temporal de notas (Ej: Prácticas, Labs)
+    List<double> subGrades = [];
+    final subGradeController = TextEditingController();
+
+    return showDialog<double>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              left: 16,
-              right: 16,
-              top: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Nueva Evaluación 📝',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                    labelText: 'Nombre (Ej: Examen Parcial)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.assignment)),
-                autofocus: true,
-                textInputAction: TextInputAction.next, // Siguiente
-              ),
-              const SizedBox(height: 10),
-              Row(
+        return StatefulBuilder(
+          builder: (context, setStateCalc) {
+            // Función interna para agregar a la lista
+            void addSubGrade() {
+              if (subGradeController.text.isNotEmpty) {
+                final val = double.tryParse(subGradeController.text);
+                if (val != null && val >= 0 && val <= 20) {
+                  setStateCalc(() {
+                    subGrades.add(val);
+                    subGradeController.clear();
+                  });
+                }
+              }
+              // Mantener foco para seguir escribiendo rápido
+            }
+
+            double promedio = subGrades.isEmpty
+                ? 0
+                : subGrades.reduce((a, b) => a + b) / subGrades.length;
+
+            return AlertDialog(
+              title: const Text("🧮 Calculadora de Continuo"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: scoreController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Nota (Opcional)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.grade)),
-                      textInputAction: TextInputAction.next, // Siguiente
-                    ),
+                  const Text(
+                      "Agrega tus prácticas, laboratorios, etc. aquí. El sistema calculará el promedio simple.",
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: subGradeController,
+                          keyboardType: TextInputType.number,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                              labelText: "Nota (Ej: 14)",
+                              border: OutlineInputBorder(),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 10)),
+                          onSubmitted: (_) =>
+                              addSubGrade(), // ENTER para agregar
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle,
+                            color: Colors.blueAccent, size: 30),
+                        onPressed: addSubGrade,
+                      )
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: weightController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Peso % (Ej: 30)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.pie_chart)),
-                      // 👇 MAGIA: Enter = Guardar
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => submitForm(),
+                  const SizedBox(height: 10),
+                  // Lista de notas agregadas
+                  if (subGrades.isNotEmpty)
+                    Wrap(
+                      spacing: 5,
+                      children: subGrades
+                          .map((g) => Chip(
+                                label: Text(g.toStringAsFixed(0)),
+                                onDeleted: () =>
+                                    setStateCalc(() => subGrades.remove(g)),
+                              ))
+                          .toList(),
                     ),
-                  ),
+                  const Divider(),
+                  Text("Promedio: ${promedio.toStringAsFixed(2)}",
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.greenAccent)),
                 ],
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: submitForm,
-                child: const Text('GUARDAR NOTA'),
-              )
-            ],
-          ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("CANCELAR")),
+                ElevatedButton(
+                    onPressed: () => Navigator.pop(
+                        context, double.parse(promedio.toStringAsFixed(2))),
+                    child: const Text("USAR ESTE PROMEDIO")),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  // 👇 PEGA ESTE BLOQUE AQUÍ (Entre _showAddEvaluationForm y build)
-
-  void _showEditEvaluationForm(BuildContext context, Evaluation eval) {
-    final nameController = TextEditingController(text: eval.name);
-    final scoreController = TextEditingController(text: eval.score.toString());
+  // --- 4. DIÁLOGO PRINCIPAL (Con Enter y Calculadora) ---
+  void _showEvaluationDialog(BuildContext context,
+      [Evaluation? evaluationToEdit]) {
+    final nameController = TextEditingController(text: evaluationToEdit?.name);
+    final scoreController =
+        TextEditingController(text: evaluationToEdit?.score?.toString());
     final weightController =
-        TextEditingController(text: eval.weight.toString());
+        TextEditingController(text: evaluationToEdit?.weight.toString());
+    DateTime? selectedDate = evaluationToEdit?.date;
 
-    // 1. CREAMOS LA FUNCIÓN DE GUARDAR AQUÍ ADENTRO PARA REUTILIZARLA
-    Future<void> submitForm() async {
-      // 1. Validaciones básicas
-      if (nameController.text.isEmpty) return;
+    // Función de guardado extraída para usarla en botones y ENTER
+    Future<void> submit() async {
+      if (nameController.text.isEmpty || weightController.text.isEmpty) return;
 
-      // 2. Quitamos el foco para evitar el congelamiento (Igual que en agregar)
-      FocusScope.of(context).unfocus();
+      FocusScope.of(context).unfocus(); // Cerrar teclado
 
-      // 3. AQUÍ ESTÁ EL TRUCO: Modificamos 'eval', NO creamos 'newEval'
-      eval.name = nameController.text;
-
-      // Lógica de la nota opcional
-      eval.score = scoreController.text.isEmpty
+      final name = nameController.text;
+      final weight =
+          double.tryParse(weightController.text.replaceAll('%', '').trim()) ??
+              0.0;
+      final score = scoreController.text.isEmpty
           ? null
           : double.tryParse(scoreController.text);
 
-      // Lógica del peso
-      eval.weight =
-          double.tryParse(weightController.text.replaceAll('%', '').trim()) ??
-              0.0;
+      if (evaluationToEdit == null) {
+        // CREAR
+        final newEval = Evaluation()
+          ..name = name
+          ..weight = weight
+          ..score = score
+          ..courseId = widget.course.key as int
+          ..date = selectedDate;
+        widget.course.evaluations.add(newEval);
+      } else {
+        // EDITAR
+        evaluationToEdit.name = name;
+        evaluationToEdit.weight = weight;
+        evaluationToEdit.score = score;
+        evaluationToEdit.date = selectedDate;
+      }
 
-      // 4. Guardamos los cambios en el MISMO objeto
-      await eval.save();
-
-      // 5. Cerramos
+      await widget.course.save();
       if (context.mounted) Navigator.pop(context);
     }
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              left: 16,
-              right: 16,
-              top: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Editar Evaluación ✏️',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
-
-              // CAMPO 1: NOMBRE
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                    labelText: 'Nombre',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.assignment)),
-                // 👇 MAGIA 1: Al dar Enter, pasa al siguiente campo
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 10),
-
-              Row(
-                children: [
-                  Expanded(
-                    // CAMPO 2: NOTA
-                    child: TextField(
-                      controller: scoreController,
-                      keyboardType: TextInputType.number,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(evaluationToEdit == null
+                  ? 'Nueva Evaluación'
+                  : 'Editar Evaluación'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // NOMBRE
+                    TextField(
+                      controller: nameController,
                       decoration: const InputDecoration(
-                          labelText: 'Nota',
+                          labelText: 'Nombre',
                           border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.grade)),
-                      autofocus: true,
-                      // 👇 MAGIA 2: Al dar Enter, pasa al Peso
-                      textInputAction: TextInputAction.next,
+                          prefixIcon: Icon(Icons.assignment)),
+                      textInputAction:
+                          TextInputAction.next, // ENTER pasa al siguiente
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    // CAMPO 3: PESO (EL ÚLTIMO)
-                    child: TextField(
+                    const SizedBox(height: 10),
+
+                    // NOTA + CALCULADORA
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: scoreController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                labelText: 'Nota',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.grade)),
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                        // BOTÓN DE CALCULADORA PARA CONTINUO
+                        IconButton(
+                          icon: const Icon(Icons.calculate,
+                              color: Colors.orangeAccent),
+                          tooltip: "Calcular promedio de prácticas/labs",
+                          onPressed: () async {
+                            final promedioCalculado =
+                                await _showSubGradeCalculator(context);
+                            if (promedioCalculado != null) {
+                              scoreController.text =
+                                  promedioCalculado.toString();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // PESO
+                    TextField(
                       controller: weightController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                           labelText: 'Peso %',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.pie_chart)),
-                      // 👇 MAGIA 3: Al dar Enter aquí, ¡GUARDA COMPLETO!
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => submitForm(),
+                      textInputAction: TextInputAction
+                          .done, // ENTER aquí envía el formulario
+                      onSubmitted: (_) =>
+                          submit(), // 👈 MAGIA: Enter guarda todo
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+
+                    // CALENDARIO
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.calendar_today,
+                          color: Colors.blueAccent),
+                      title: Text(
+                          selectedDate == null
+                              ? "Programar fecha (Opcional)"
+                              : "Fecha: ${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                          style: TextStyle(
+                              color: selectedDate == null ? Colors.grey : null,
+                              fontWeight: FontWeight.bold)),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) {
+                          setState(() => selectedDate = picked);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
+              actions: [
+                if (evaluationToEdit != null)
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () async {
-                      await eval.delete();
+                      // Borrar manualmente de la lista del curso
+                      widget.course.evaluations.remove(evaluationToEdit);
+                      await widget.course.save(); // Guardar el padre
                       if (context.mounted) Navigator.pop(context);
                     },
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      // Usamos la misma función que el teclado
-                      onPressed: submitForm,
-                      child: const Text('ACTUALIZAR'),
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('CANCELAR'),
+                ),
+                ElevatedButton(
+                  onPressed: submit,
+                  child: const Text('GUARDAR'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
-  // 👆 FIN DEL BLOQUE NUEVO
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.course.name)),
+      appBar: AppBar(
+        title: Text(widget.course.name),
+        actions: [
+          // BOTÓN MÁGICO: Plantilla San Marcos
+          IconButton(
+            icon: const Icon(Icons.auto_fix_high),
+            tooltip: "Cargar Estructura San Marcos",
+            onPressed: _applySanMarcosTemplate,
+          )
+        ],
+      ),
       body: ValueListenableBuilder(
         valueListenable:
-            Hive.box<Evaluation>(HiveDataService.boxEvaluations).listenable(),
-        builder: (context, Box<Evaluation> box, _) {
-          // Filtramos las notas de ESTE curso
-          final evaluations =
-              box.values.where((e) => e.courseId == widget.course.key).toList();
+            Hive.box<Course>(HiveDataService.boxCourses).listenable(),
+        builder: (context, Box<Course> box, _) {
+          final freshCourse = box.get(widget.course.key);
+          final evaluations = freshCourse?.evaluations ?? [];
           final average = _calculateAverage(evaluations);
 
           return Column(
             children: [
-              // TARJETA DE RESUMEN (PROMEDIO)
+              // 1. TARJETA RESUMEN
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: average >= 10.5
                       ? Colors.green.shade100
-                      : Colors.red.shade100, // Color dinámico (Aprobado/Jalado)
+                      : Colors.red.shade100,
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
+                    // ignore: deprecated_member_use
                     BoxShadow(
                         // ignore: deprecated_member_use
                         color: Colors.black.withOpacity(0.1),
@@ -340,16 +409,14 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                   children: [
                     const Text("Promedio Actual:",
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87, // <--- AGREGAR ESTA LÍNEA
-                        )),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87)),
                     Text(
                       average.toStringAsFixed(2),
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        // El número ya tiene buen contraste porque usas shade800 (oscuro)
                         color: average >= 10.5
                             ? Colors.green.shade800
                             : Colors.red.shade800,
@@ -359,12 +426,12 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                 ),
               ),
 
-              // --- INICIO DEL ORÁCULO ---
+              // 2. ORÁCULO
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey.shade900, // Fondo oscuro estilo hacker
+                  color: Colors.blueGrey.shade900,
                   borderRadius: BorderRadius.circular(10),
                   // ignore: deprecated_member_use
                   border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
@@ -376,8 +443,7 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _getPrediction(
-                            evaluations), // Llamamos a la función mágica
+                        _getPrediction(evaluations),
                         style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w500),
                       ),
@@ -385,19 +451,35 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                   ],
                 ),
               ),
-              // --- FIN DEL ORÁCULO ---
 
-              const SizedBox(height: 10), // Un separador pequeño
+              const SizedBox(height: 10),
 
-              // LISTA DE NOTAS
+              // 3. LISTA
               Expanded(
                 child: evaluations.isEmpty
-                    ? const Center(
-                        child: Text("Sin evaluaciones aún. ¡Agrega una!"))
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text("¡Curso vacío!",
+                                style: TextStyle(fontSize: 18)),
+                            const SizedBox(height: 10),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.auto_fix_high),
+                              label: const Text("Usar Estructura San Marcos"),
+                              onPressed: _applySanMarcosTemplate,
+                            )
+                          ],
+                        ),
+                      )
                     : ListView.builder(
                         itemCount: evaluations.length,
                         itemBuilder: (context, index) {
                           final eval = evaluations[index];
+                          String dateText = eval.date != null
+                              ? " • ${eval.date!.day}/${eval.date!.month}"
+                              : "";
+
                           return ListTile(
                             leading: CircleAvatar(
                               backgroundColor: Colors.blueAccent.shade100,
@@ -406,15 +488,15 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
                                       fontSize: 12, color: Colors.black)),
                             ),
                             title: Text(eval.name),
-                            subtitle: Text(eval.scoreObtained != null
-                                ? "Nota: ${eval.scoreObtained}"
-                                : "Pendiente"),
+                            subtitle: Text((eval.scoreObtained != null
+                                ? "Nota: ${eval.scoreObtained}$dateText"
+                                : "Pendiente$dateText")),
                             trailing: eval.scoreObtained != null
                                 ? const Icon(Icons.check_circle,
                                     color: Colors.green)
                                 : const Icon(Icons.circle_outlined,
                                     color: Colors.grey),
-                            onTap: () => _showEditEvaluationForm(context, eval),
+                            onTap: () => _showEvaluationDialog(context, eval),
                           );
                         },
                       ),
@@ -424,7 +506,7 @@ class _CourseGradesScreenState extends State<CourseGradesScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEvaluationForm(context),
+        onPressed: () => _showEvaluationDialog(context),
         child: const Icon(Icons.add),
       ),
     );

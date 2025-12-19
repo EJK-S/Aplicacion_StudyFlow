@@ -160,70 +160,111 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 1. EL DASHBOARD GLOBAL (Resumen del ciclo actual)
-        ValueListenableBuilder(
-          valueListenable:
-              Hive.box<Semester>(HiveDataService.boxSemesters).listenable(),
-          builder: (context, Box<Semester> boxSemesters, _) {
-            Semester? currentSemester;
-            try {
-              currentSemester =
-                  boxSemesters.values.firstWhere((s) => s.isCurrent);
-            } catch (e) {
-              currentSemester = null;
-            }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        bool isDesktop = constraints.maxWidth > 900;
 
-            if (currentSemester == null) return const SizedBox.shrink();
+        // 1. Preparamos el widget del Resumen para no repetir código
+        //    (Este es el bloque que daba error, ahora corregido)
+        Widget buildSummaryCard() {
+          return ValueListenableBuilder(
+            valueListenable:
+                Hive.box<Course>(HiveDataService.boxCourses).listenable(),
+            builder: (context, Box<Course> coursesBox, _) {
+              return ValueListenableBuilder(
+                valueListenable:
+                    Hive.box<Semester>(HiveDataService.boxSemesters)
+                        .listenable(),
+                builder: (context, Box<Semester> semesterBox, _) {
+                  // 👇 LÓGICA SEGURA: Usamos try-catch en lugar de crear objetos falsos
+                  Semester? activeSemester;
+                  try {
+                    activeSemester =
+                        semesterBox.values.firstWhere((s) => s.isCurrent);
+                  } catch (_) {
+                    // Si no hay semestre activo, se queda en null
+                    activeSemester = null;
+                  }
 
-            return ValueListenableBuilder(
-              valueListenable:
-                  Hive.box<Course>(HiveDataService.boxCourses).listenable(),
-              builder: (context, Box<Course> boxCourses, _) {
-                final courses = boxCourses.values
-                    .where((c) => c.semesterId == currentSemester!.key)
-                    .toList();
+                  // Si no hay semestre, no mostramos nada
+                  if (activeSemester == null) return const SizedBox();
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  // Filtramos los cursos usando la key real del semestre encontrado
+                  final courses = coursesBox.values
+                      .where((c) => c.semesterId == activeSemester!.key)
+                      .toList();
+
+                  return SemesterSummaryCard(
+                      semestreNombre: activeSemester.name, cursos: courses);
+                },
+              );
+            },
+          );
+        }
+
+        if (isDesktop) {
+          // --- DISEÑO DE ESCRITORIO ---
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 4,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      buildSummaryCard(), // <--- Usamos la función corregida
+                      const SizedBox(height: 16),
+                      const Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: StudyPieChart(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const InsightsCard(),
+                    ],
+                  ),
+                ),
+              ),
+              const Expanded(
+                flex: 6,
+                child: Column(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16, top: 10),
-                      child: Text("Tu Resumen Actual",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.grey)),
+                    UpcomingExamsCard(),
+                    Expanded(
+                      child: SemestersListScreen(),
                     ),
-                    SemesterSummaryCard(
-                        semestreNombre: currentSemester!.name, cursos: courses),
                   ],
-                );
-              },
-            );
-          },
-        ),
-
-        const UpcomingExamsCard(),
-
-        const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Card(
-            // Lo envolvemos en una Card para que se vea elegante
-            elevation: 2,
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: StudyPieChart(), // <--- ¡AQUÍ ESTÁ!
-            ),
-          ),
-        ),
-
-        const InsightsCard(),
-
-        // 2. LA LISTA DE SEMESTRES (Historial)
-        const Expanded(
-          child: SemestersListScreen(),
-        ),
-      ],
+                ),
+              ),
+            ],
+          );
+        } else {
+          // --- DISEÑO MÓVIL ---
+          return Column(
+            children: [
+              buildSummaryCard(), // <--- Usamos la función corregida
+              const UpcomingExamsCard(),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: StudyPieChart(),
+                  ),
+                ),
+              ),
+              const InsightsCard(),
+              const Expanded(
+                child: SemestersListScreen(),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 }

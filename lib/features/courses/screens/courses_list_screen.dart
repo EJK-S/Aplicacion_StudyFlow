@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../data/local/hive_data_service.dart';
 import '../../../data/models/models.dart';
-import '../widgets/semester_summary_card.dart';
 import 'course_grades_screen.dart';
 
 class CoursesListScreen extends StatefulWidget {
@@ -16,219 +14,346 @@ class CoursesListScreen extends StatefulWidget {
 }
 
 class _CoursesListScreenState extends State<CoursesListScreen> {
-  // --- FORMULARIO ACTUALIZADO CON HORARIOS ---
-  void _showCourseForm(BuildContext context, {Course? courseToEdit}) {
-    final isEditing = courseToEdit != null;
-
-    // Controladores de Texto
-    final nameController =
-        TextEditingController(text: isEditing ? courseToEdit.name : '');
-    final creditsController = TextEditingController(
-        text: isEditing ? courseToEdit.credits.toString() : '3');
-    final profController = TextEditingController(
-        text: isEditing ? courseToEdit.professorName : '');
+  // --- DIÁLOGO PARA CREAR/EDITAR CURSO ---
+  void _showCourseDialog(BuildContext context, [Course? courseToEdit]) {
+    final nameController = TextEditingController(text: courseToEdit?.name);
+    final creditsController =
+        TextEditingController(text: courseToEdit?.credits.toString());
     final sectionController =
-        TextEditingController(text: isEditing ? courseToEdit.section : '');
+        TextEditingController(text: courseToEdit?.section);
+    final professorController =
+        TextEditingController(text: courseToEdit?.professorName);
 
-    // Lista temporal para guardar los horarios antes de dar "Guardar"
-    // (Si editamos, copiamos la lista existente. Si es nuevo, lista vacía)
-    List<ClassSession> tempSessions =
-        isEditing ? List.from(courseToEdit.schedules) : [];
+    // Gestión de Horarios (Lista temporal)
+    List<ClassSession> tempSchedules = courseToEdit?.schedules.toList() ?? [];
 
-    Future<void> submitForm() async {
-      if (nameController.text.isEmpty) return;
-
-      final service = HiveDataService();
-
-      // Datos comunes
-      final name = nameController.text;
-      final credits = int.tryParse(creditsController.text) ?? 0;
-      final prof = profController.text;
-      final section = sectionController.text;
-
-      if (isEditing) {
-        // ACTUALIZAR
-        courseToEdit.name = name;
-        courseToEdit.credits = credits;
-        courseToEdit.professorName = prof;
-        courseToEdit.section = section;
-        courseToEdit.schedules = tempSessions; // Guardamos la lista nueva
-        await courseToEdit.save();
-      } else {
-        // CREAR NUEVO
-        final newCourse = Course()
-          ..name = name
-          ..credits = credits
-          ..professorName = prof
-          ..semesterId = widget.semester.key
-          ..section = section
-          ..schedules = tempSessions; // Guardamos la lista
-
-        await service.saveCourse(newCourse);
-      }
-
-      if (context.mounted) Navigator.pop(context);
-    }
-
-    // Abrimos el BottomSheet
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        // Usamos StatefulBuilder para poder actualizar la lista de horarios visualmente
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                  left: 16,
-                  right: 16,
-                  top: 16),
-              child: SingleChildScrollView(
-                // Para que no tape el teclado
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(isEditing ? 'Editar Curso ✏️' : 'Nuevo Curso 📚',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 15),
+          builder: (context, setStateDialog) {
+            // --- LÓGICA DE GUARDADO (Centralizada) ---
+            Future<void> submitForm() async {
+              if (nameController.text.isEmpty ||
+                  creditsController.text.isEmpty) {
+                // Validación visual rápida (puedes agregar un SnackBar si quieres)
+                return;
+              }
 
-                    // 1. NOMBRE
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                          labelText: 'Nombre (Ej: Cálculo II)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.book)),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 10),
+              // Cerrar teclado para evitar bugs
+              FocusScope.of(context).unfocus();
 
-                    // 2. CRÉDITOS Y SECCIÓN
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: creditsController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                                labelText: 'Créditos',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.numbers)),
-                            textInputAction: TextInputAction.next,
+              final name = nameController.text;
+              final credits = int.tryParse(creditsController.text) ?? 0;
+              final section = sectionController.text;
+              final professor = professorController.text;
+
+              if (courseToEdit == null) {
+                // CREAR NUEVO
+                final newCourse = Course()
+                  ..name = name
+                  ..credits = credits
+                  ..semesterId = widget.semester.key as int
+                  ..section = section
+                  ..professorName = professor
+                  ..schedules = tempSchedules; // Guardamos horarios
+
+                final box = Hive.box<Course>(HiveDataService.boxCourses);
+                await box.add(newCourse);
+              } else {
+                // EDITAR EXISTENTE
+                courseToEdit.name = name;
+                courseToEdit.credits = credits;
+                courseToEdit.section = section;
+                courseToEdit.professorName = professor;
+                courseToEdit.schedules = tempSchedules; // Actualizamos horarios
+                await courseToEdit.save();
+              }
+
+              if (context.mounted) Navigator.pop(context);
+            }
+
+            // --- DIÁLOGO PARA AGREGAR HORARIO ---
+            void showAddScheduleDialog() {
+              int selectedDay = 1; // Lunes
+              int startHour = 8;
+              int duration = 2;
+              String type = "Teoría";
+              String classroom = "";
+
+              showDialog(
+                context: context,
+                builder: (ctx) =>
+                    StatefulBuilder(builder: (ctx, setScheduleState) {
+                  return AlertDialog(
+                    title: const Text("Agregar Horario ⏰"),
+                    content: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          DropdownButton<int>(
+                            value: selectedDay,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 1, child: Text("Lunes")),
+                              DropdownMenuItem(value: 2, child: Text("Martes")),
+                              DropdownMenuItem(
+                                  value: 3, child: Text("Miércoles")),
+                              DropdownMenuItem(value: 4, child: Text("Jueves")),
+                              DropdownMenuItem(
+                                  value: 5, child: Text("Viernes")),
+                              DropdownMenuItem(value: 6, child: Text("Sábado")),
+                              DropdownMenuItem(
+                                  value: 7, child: Text("Domingo")),
+                            ],
+                            onChanged: (v) =>
+                                setScheduleState(() => selectedDay = v!),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: sectionController,
-                            decoration: const InputDecoration(
-                                labelText: 'Sección (Ej: G1)',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.group)),
-                            textInputAction: TextInputAction.next,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                      labelText: "Hora Inicio (0-23)"),
+                                  onChanged: (v) =>
+                                      startHour = int.tryParse(v) ?? 8,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                      labelText: "Duración (hrs)"),
+                                  onChanged: (v) =>
+                                      duration = int.tryParse(v) ?? 2,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          TextField(
+                            decoration: const InputDecoration(
+                                labelText: "Aula (Ej: 201)"),
+                            onChanged: (v) => classroom = v,
+                          ),
+                          DropdownButton<String>(
+                            value: type,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: "Teoría", child: Text("Teoría")),
+                              DropdownMenuItem(
+                                  value: "Práctica", child: Text("Práctica")),
+                              DropdownMenuItem(
+                                  value: "Laboratorio",
+                                  child: Text("Laboratorio")),
+                              DropdownMenuItem(
+                                  value: "Seminario", child: Text("Seminario")),
+                              DropdownMenuItem(
+                                  value: "Recuperación",
+                                  child: Text("Recuperación")),
+                            ],
+                            onChanged: (v) => setScheduleState(() => type = v!),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-
-                    // 3. PROFESOR
-                    TextField(
-                      controller: profController,
-                      decoration: const InputDecoration(
-                          labelText: 'Profesor (Opcional)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.person)),
-                      textInputAction: TextInputAction.done,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 4. SECCIÓN DE HORARIOS (DINÁMICA)
-                    const Text("Horarios ⏰",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 5),
-
-                    // Lista visual de horarios agregados
-                    if (tempSessions.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                            // ignore: deprecated_member_use
-                            color: Colors.grey.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8)),
-                        child: const Text("Sin horarios definidos",
-                            style: TextStyle(color: Colors.grey)),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("Cancelar")),
+                      ElevatedButton(
+                        onPressed: () {
+                          setStateDialog(() {
+                            tempSchedules.add(ClassSession(
+                                dayIndex: selectedDay,
+                                startHour: startHour,
+                                durationHours: duration,
+                                classroom: classroom,
+                                type: type));
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text("Agregar"),
                       )
-                    else
-                      ...tempSessions.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final session = entry.value;
-                        final dias = [
-                          "",
-                          "Lun",
-                          "Mar",
-                          "Mié",
-                          "Jue",
-                          "Vie",
-                          "Sáb",
-                          "Dom"
-                        ];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 5),
-                          color: Colors.blueGrey.shade900,
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.access_time,
-                                color: Colors.amber, size: 20),
-                            title: Text(
-                                "${dias[session.dayIndex]} ${session.startHour}:00 - ${session.startHour + session.durationHours}:00"),
-                            subtitle: Text(
-                                "${session.type} • Aula: ${session.classroom}"),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.red, size: 18),
-                              onPressed: () {
-                                setModalState(() {
-                                  tempSessions.removeAt(index);
-                                });
-                              },
+                    ],
+                  );
+                }),
+              );
+            }
+
+            return AlertDialog(
+              title: Text(
+                  courseToEdit == null ? "Nuevo Curso 📚" : "Editar Curso ✏️"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 1. NOMBRE
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                            labelText: "Nombre (Ej: Cálculo II)",
+                            prefixIcon: Icon(Icons.book),
+                            border: OutlineInputBorder()),
+                        textInputAction:
+                            TextInputAction.next, // Enter -> Siguiente
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 2. CRÉDITOS Y SECCIÓN
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: creditsController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: "Créditos",
+                                  prefixIcon: Icon(Icons.numbers),
+                                  border: OutlineInputBorder()),
+                              textInputAction:
+                                  TextInputAction.next, // Enter -> Siguiente
                             ),
                           ),
-                        );
-                      }),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: sectionController,
+                              decoration: const InputDecoration(
+                                  labelText: "Sección (Ej: G1)",
+                                  prefixIcon: Icon(Icons.people),
+                                  border: OutlineInputBorder()),
+                              textInputAction:
+                                  TextInputAction.next, // Enter -> Siguiente
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
 
-                    // Botón para agregar horario
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        // Abrimos el diálogo para crear una sesión
-                        final newSession = await _showAddSessionDialog(context);
-                        if (newSession != null) {
-                          setModalState(() {
-                            tempSessions.add(newSession);
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.add_alarm),
-                      label: const Text("Agregar Horario"),
-                    ),
+                      // 3. PROFESOR (El último campo de texto)
+                      TextField(
+                        controller: professorController,
+                        decoration: const InputDecoration(
+                            labelText: "Profesor (Opcional)",
+                            prefixIcon: Icon(Icons.person),
+                            border: OutlineInputBorder()),
+                        // 👇 AQUÍ ESTÁ LA MAGIA: ENTER = GUARDAR
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => submitForm(),
+                      ),
 
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: submitForm,
-                      style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15)),
-                      child: Text(
-                          isEditing ? 'ACTUALIZAR CURSO' : 'GUARDAR CURSO'),
-                    )
-                  ],
+                      const SizedBox(height: 20),
+
+                      // 4. LISTA DE HORARIOS (Visual)
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text("Horarios ⏰",
+                              style: Theme.of(context).textTheme.titleSmall)),
+                      Container(
+                        margin: const EdgeInsets.only(top: 5),
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                            // ignore: deprecated_member_use
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white10)),
+                        child: Column(
+                          children: [
+                            if (tempSchedules.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.all(10.0),
+                                child: Text("Sin horarios definidos",
+                                    style: TextStyle(
+                                        color: Colors.grey, fontSize: 12)),
+                              ),
+                            ...tempSchedules.map((s) => ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.access_time,
+                                      color: Colors.orangeAccent, size: 20),
+                                  title: Text(_getDayName(s.dayIndex)),
+                                  subtitle: Text(
+                                      "${s.startHour}:00 - ${s.startHour + s.durationHours}:00 • ${s.type}"),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.close,
+                                        color: Colors.red, size: 18),
+                                    onPressed: () {
+                                      setStateDialog(() {
+                                        tempSchedules.remove(s);
+                                      });
+                                    },
+                                  ),
+                                )),
+                            const Divider(),
+                            TextButton.icon(
+                                onPressed: showAddScheduleDialog,
+                                icon: const Icon(Icons.add_alarm),
+                                label: const Text("Agregar Horario"))
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               ),
+              actions: [
+                if (courseToEdit != null)
+                  TextButton(
+                    onPressed: () async {
+                      // Confirmar borrado
+                      final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                                title: const Text("¿Borrar curso?"),
+                                content: const Text(
+                                    "Se borrarán también todas las notas asociadas."),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text("Cancelar")),
+                                  TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text("Borrar",
+                                          style: TextStyle(color: Colors.red))),
+                                ],
+                              ));
+
+                      if (confirm == true) {
+                        // Borrar notas asociadas primero
+                        final boxEvals = Hive.box<Evaluation>(
+                            HiveDataService.boxEvaluations);
+                        final evalsToDelete = boxEvals.values
+                            .where((e) => e.courseId == courseToEdit.key)
+                            .map((e) => e.key)
+                            .toList();
+                        await boxEvals.deleteAll(evalsToDelete);
+
+                        // Borrar curso
+                        await courseToEdit.delete();
+                        if (context.mounted) {
+                          Navigator.pop(context); // Cerrar diálogo
+                        }
+                      }
+                    },
+                    child: const Text("Eliminar",
+                        style: TextStyle(color: Colors.red)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancelar"),
+                ),
+                ElevatedButton(
+                  onPressed: submitForm, // Usa la misma función que el ENTER
+                  child: Text(courseToEdit == null
+                      ? "GUARDAR CURSO"
+                      : "ACTUALIZAR CURSO"),
+                ),
+              ],
             );
           },
         );
@@ -236,198 +361,22 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
     );
   }
 
-  // --- SUB-DIALOGO PARA AGREGAR UNA SESIÓN (Día, Hora, Aula) ---
-  Future<ClassSession?> _showAddSessionDialog(BuildContext context) async {
-    // Valores iniciales
-    int selectedDay = 1; // Lunes
-    int startHour = 8; // 8 AM
-    int duration = 2; // 2 horas
-    String type = "Teoría";
-    final roomController = TextEditingController(text: "S/N");
-
-    final dias = [
-      "Lunes",
-      "Martes",
-      "Miércoles",
-      "Jueves",
-      "Viernes",
-      "Sábado",
-      "Domingo"
-    ];
-    final tipos = ["Teoría", "Práctica", "Laboratorio", "Seminario"];
-
-    return showDialog<ClassSession>(
-        context: context,
-        builder: (ctx) {
-          // Usamos StatefulBuilder aquí también para los dropdowns internos
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: const Text("Agregar Sesión"),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 1. DÍA
-                    DropdownButtonFormField<int>(
-                      initialValue: selectedDay,
-                      decoration: const InputDecoration(labelText: "Día"),
-                      items: List.generate(
-                          7,
-                          (index) => DropdownMenuItem(
-                                value: index + 1,
-                                child: Text(dias[index]),
-                              )),
-                      onChanged: (v) => setState(() => selectedDay = v!),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 2. HORA Y DURACIÓN
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            initialValue: startHour,
-                            decoration:
-                                const InputDecoration(labelText: "Inicio"),
-                            items: List.generate(
-                                16,
-                                (index) => DropdownMenuItem(
-                                      // De 7 a 22
-                                      value: index + 7,
-                                      child: Text("${index + 7}:00"),
-                                    )),
-                            onChanged: (v) => setState(() => startHour = v!),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            initialValue: duration,
-                            decoration: const InputDecoration(
-                                labelText: "Duración (h)"),
-                            items: [1, 2, 3, 4, 5]
-                                .map((h) => DropdownMenuItem(
-                                    value: h, child: Text("$h h")))
-                                .toList(),
-                            onChanged: (v) => setState(() => duration = v!),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 3. TIPO Y AULA
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: type,
-                            decoration:
-                                const InputDecoration(labelText: "Tipo"),
-                            items: tipos
-                                .map((t) =>
-                                    DropdownMenuItem(value: t, child: Text(t)))
-                                .toList(),
-                            onChanged: (v) => setState(() => type = v!),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: roomController,
-                            decoration:
-                                const InputDecoration(labelText: "Aula"),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancelar")),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Retornamos el objeto ClassSession nuevo
-                      final session = ClassSession(
-                        dayIndex: selectedDay,
-                        startHour: startHour,
-                        durationHours: duration,
-                        classroom: roomController.text,
-                        type: type,
-                      );
-                      Navigator.pop(context, session);
-                    },
-                    child: const Text("Agregar"),
-                  )
-                ],
-              );
-            },
-          );
-        });
-  }
-
-  // --- FUNCIÓN DE BORRADO BLINDADA ---
-  void _deleteCourse(BuildContext context, Course course) {
-    showDialog(
-      context: context,
-      barrierDismissible: false, // Evita cerrar tocando afuera mientras borra
-      builder: (ctx) => AlertDialog(
-        title: const Text("¿Borrar curso?"),
-        content: Text("Se eliminará '${course.name}' y todas sus notas."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancelar"),
-          ),
-          TextButton(
-            onPressed: () async {
-              // 1. GUARDAR REFERENCIA
-              final navigator = Navigator.of(ctx);
-
-              try {
-                if (course.isInBox) {
-                  // ... Lógica de borrado de notas ...
-                  final boxEvaluations =
-                      Hive.box<Evaluation>(HiveDataService.boxEvaluations);
-                  final evaluacionesBorrar = boxEvaluations.values
-                      .where((ev) => ev.courseId == course.key)
-                      .map((ev) => ev.key)
-                      .toList();
-
-                  if (evaluacionesBorrar.isNotEmpty) {
-                    await boxEvaluations.deleteAll(evaluacionesBorrar);
-                  }
-
-                  await course.delete();
-                }
-              } catch (e) {
-                if (kDebugMode) {
-                  print("Error: $e");
-                }
-              } finally {
-                // 2. CERRAR USANDO LA REFERENCIA
-                navigator.pop();
-              }
-            },
-            child: const Text("Borrar", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  // Helper para nombres de días
+  String _getDayName(int index) {
+    const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    if (index >= 1 && index <= 7) return days[index - 1];
+    return "Día $index";
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.semester.name),
-      ),
+      appBar: AppBar(title: Text(widget.semester.name)),
       body: ValueListenableBuilder(
         valueListenable:
             Hive.box<Course>(HiveDataService.boxCourses).listenable(),
         builder: (context, Box<Course> box, _) {
+          // Filtrar cursos de este semestre
           final courses = box.values
               .where((c) => c.semesterId == widget.semester.key)
               .toList();
@@ -437,99 +386,65 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.library_books, size: 60, color: Colors.grey),
+                  const Icon(Icons.menu_book, size: 60, color: Colors.grey),
                   const SizedBox(height: 10),
                   Text("No hay cursos en ${widget.semester.name}",
                       style: const TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                      onPressed: () => _showCourseDialog(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text("Crear Primer Curso"))
                 ],
               ),
             );
           }
 
-          return Column(
-            children: [
-              SemesterSummaryCard(
-                semestreNombre: widget.semester.name,
-                cursos: courses,
-              ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: courses.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  itemBuilder: (context, index) {
-                    final course = courses[index];
-                    return Card(
-                      key: ValueKey(course.key),
-                      elevation: 2,
-                      child: ListTile(
-                        leading: CircleAvatar(
-                            child: Text(course.name.isNotEmpty
-                                ? course.name[0].toUpperCase()
-                                : '?')),
-                        title: Text(course.name,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(
-                            "Prof: ${course.professorName!.isNotEmpty ? course.professorName : 'Sin asignar'} • ${course.credits} créditos"),
-
-                        // --- AQUÍ ESTÁ EL MENÚ NUEVO (EDITAR / BORRAR) ---
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _showCourseForm(context, courseToEdit: course);
-                            } else if (value == 'delete') {
-                              _deleteCourse(context, course);
-                            }
-                          },
-                          itemBuilder: (BuildContext context) =>
-                              <PopupMenuEntry<String>>[
-                            const PopupMenuItem<String>(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, size: 20),
-                                  SizedBox(width: 10),
-                                  Text('Editar')
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete,
-                                      color: Colors.red, size: 20),
-                                  SizedBox(width: 10),
-                                  Text('Borrar',
-                                      style: TextStyle(color: Colors.red))
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        // -------------------------------------------------
-
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  CourseGradesScreen(course: course),
-                            ),
-                          );
-                        },
-                      ),
-                    );
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: courses.length,
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              return Card(
+                color: const Color(0xFF252525),
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.indigoAccent,
+                    child: Text(
+                        course.name.isNotEmpty
+                            ? course.name[0].toUpperCase()
+                            : "?",
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(course.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: Text(
+                      "Prof: ${course.professorName ?? 'No sé'} • ${course.credits} créditos"),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: () => _showCourseDialog(context, course),
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                CourseGradesScreen(course: course)));
                   },
                 ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () =>
-            _showCourseForm(context), // Modo crear (sin argumentos)
+        onPressed: () => _showCourseDialog(context),
         child: const Icon(Icons.add),
       ),
     );
