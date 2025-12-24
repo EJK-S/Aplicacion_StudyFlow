@@ -10,6 +10,14 @@
 
 ---
 
+## 📥 Descarga Directa (Windows)
+
+¿Quieres probar la app sin compilar código? Descarga el instalador oficial para Windows:
+
+👉 **[Descargar StudyFlow v1.0 para Windows](https://github.com/EJK-S/Aplicacion_StudyFlow/releases/latest)**
+
+---
+
 ## 📱 Descripción del Proyecto
 
 **StudyFlow** es una aplicación multiplataforma (Móvil & Desktop) diseñada para estudiantes universitarios que necesitan más que una simple agenda. El proyecto nace de la necesidad de centralizar la gestión académica y automatizar tareas burocráticas como la creación de carátulas y referencias bibliográficas.
@@ -27,10 +35,12 @@ Construida con **Flutter** y siguiendo los principios de **Clean Architecture**,
 - **Historial de Ciclos:** Organización por semestres (2025-I, 2025-II, etc.).
 
 ### 🛠️ 2. Módulo de Herramientas (AutoTemplate)
-- **📄 Generador de Carátulas PDF:** - Crea portadas oficiales en segundos seleccionando tu universidad (UNMSM, UNI, etc.).
+- **📄 Generador de Carátulas PDF:**
+  - Crea portadas oficiales en segundos seleccionando tu universidad (UNMSM, UNI, etc.).
   - Exportación directa a PDF listo para imprimir o adjuntar.
   - Soporte para logos dinámicos y listas de integrantes.
-- **🤖 Generador APA 7 Pro:** - Web Scraping de metadatos: Pega un link y la app extrae el Título, Sitio Web y Año automáticamente.
+- **🤖 Generador APA 7 Pro:**
+  - Web Scraping de metadatos: Pega un link y la app extrae el Título, Sitio Web y Año automáticamente.
   - Formateo automático de referencias bibliográficas listo para copiar al portapapeles.
 
 ---
@@ -39,12 +49,12 @@ Construida con **Flutter** y siguiendo los principios de **Clean Architecture**,
 
 | Dashboard Global | Generador PDF (UNMSM) |
 |:---:|:---:|
-| <img src="screenshots/dashboard.png" width="400"> | <img src="screenshots/pdf_generator.png" width="400"> |
+| <img src="screenshots/dashboard.png" width="400" alt="Dashboard Principal"> | <img src="screenshots/pdf_generator.png" width="400" alt="Generador PDF"> |
 | *Resumen de notas y promedios en tiempo real* | *Exportación de carátulas formales* |
 
 | Generador APA 7 | Gestión de Notas |
 |:---:|:---:|
-| <img src="screenshots/apa_generator.png" width="400"> | <img src="screenshots/grades.png" width="400"> |
+| <img src="screenshots/apa_generator.png" width="400" alt="Generador APA"> | <img src="screenshots/grades.png" width="400" alt="Gestión de Notas"> |
 | *Extracción automática de metadatos web* | *Cálculo de promedios ponderados* |
 
 ---
@@ -67,9 +77,9 @@ El proyecto sigue una estructura basada en **Clean Architecture**, separando las
 
 ---
 
-## 🚀 Instalación y Ejecución
+## 🚀 Instalación y Desarrollo (Para Devs)
 
-Sigue estos pasos para correr el proyecto en tu máquina local:
+Si deseas contribuir o modificar el código fuente:
 
 1.  **Clonar el repositorio:**
     ```bash
@@ -111,5 +121,5 @@ Este proyecto está bajo la Licencia MIT.
 ---
 
 <div align="center">
-  <sub>Desarrollado con ❤️ por Jean Carlo</sub>
+  <sub>Desarrollado con ❤️ por <a href="https://github.com/EJK-S">Jean Carlo</a></sub>
 </div>
